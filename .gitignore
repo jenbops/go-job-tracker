@@ -1,0 +1,13 @@
+# Personal data: never commit the database or CSV exports
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.csv
+
+# Build output
+/jobtracker
+
+# macOS and editor files
+.DS_Store
+.vscode/
