@@ -190,3 +190,36 @@ func TestStatusChange(t *testing.T) {
 		t.Fatalf("empty status: got %d, want 400", code)
 	}
 }
+func TestGetStats(t *testing.T) {
+	db := newTestDB(t)
+	add := func(company, status, source, date string) {
+		t.Helper()
+		_, err := AddApplication(db, Application{
+			Company: company, RoleTitle: "EM", Status: status, Source: source, DateReviewed: date,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("A", "Applied", "LinkedIn", "2026-11-23")  // a Monday
+	add("B", "Applied", "", "2026-11-29")          // the Sunday of that week
+	add("C", "Rejected", "LinkedIn", "2026-11-30") // the next Monday
+
+	s, err := GetStats(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Total != 3 {
+		t.Errorf("total = %d, want 3", s.Total)
+	}
+	if len(s.ByStatus) != 2 || s.ByStatus[0].Label != "Applied" ||
+		s.ByStatus[0].N != 2 || s.ByStatus[0].Pct != 100 {
+		t.Errorf("by status = %+v", s.ByStatus)
+	}
+	if len(s.BySource) != 2 || s.BySource[0].Label != "LinkedIn" || s.BySource[1].Label != "(none)" {
+		t.Errorf("by source = %+v", s.BySource)
+	}
+	if len(s.ByWeek) != 2 || s.ByWeek[0].Label != "Week of 11/30/2026" || s.ByWeek[1].N != 2 {
+		t.Errorf("by week = %+v", s.ByWeek)
+	}
+}

@@ -25,7 +25,8 @@ Add `-force` to add the row anyway.
 
 Then open http://127.0.0.1:8080. The page has a searchable, sortable table,
 a form to add an application with a live warning when the company is already
-tracked, an edit form, and a delete button.
+tracked, an edit form, and a delete button. A stats page at /stats/ shows counts
+by status, source and week.
 
 The server listens on 127.0.0.1 only, so nothing else on your network can
 reach it. Use `-addr` to change that, and only if you understand the risk,

@@ -42,6 +42,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /edit/{id}", s.handleEditForm)
 	mux.HandleFunc("POST /edit/{id}", s.handleUpdate)
 	mux.HandleFunc("POST /status/{id}", s.handleStatus)
+	mux.HandleFunc("GET /stats", s.handleStats)
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
@@ -361,4 +362,14 @@ func safeBack(p string) string {
 		return p
 	}
 	return "/"
+}
+func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := GetStats(s.db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.tmpl.ExecuteTemplate(w, "stats.html", stats); err != nil {
+		log.Println("render:", err)
+	}
 }

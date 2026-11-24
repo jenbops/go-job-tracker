@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job Tracker stats</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; color: #222; }
+  .bars { border-collapse: collapse; width: 100%; max-width: 760px; }
+  .bars td { padding: 4px 8px; border: none; font-size: 14px; }
+  .label { width: 260px; }
+  .track { background: #f3f4f6; }
+  .bar { background: #3b82f6; height: 16px; border-radius: 3px; }
+  .n { width: 40px; text-align: right; }
+</style>
+</head>
+<body>
+<h1>Stats</h1>
+<p><a href="/">Back to the list</a></p>
+<p>{{.Total}} applications</p>
+
+<h2>By status</h2>
+{{template "bars" .ByStatus}}
+
+<h2>By source</h2>
+{{template "bars" .BySource}}
+
+<h2>By week reviewed</h2>
+{{template "bars" .ByWeek}}
+</body>
+</html>
+
+{{define "bars"}}
+<table class="bars">
+  {{range .}}
+  <tr>
+    <td class="label">{{.Label}}</td>
+    <td class="track"><div class="bar" style="width: {{.Pct}}%"></div></td>
+    <td class="n">{{.N}}</td>
+  </tr>
+  {{end}}
+</table>
+{{end}}
