@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job Tracker</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; color: #222; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #ddd; }
+  th a { color: inherit; text-decoration: none; }
+  th a:hover { text-decoration: underline; }
+  input[type=search] { padding: 6px; width: 320px; }
+  .chip { padding: 2px 8px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
+  .chip-applied { background: #dbeafe; color: #1e40af; }
+  .chip-interview { background: #dcfce7; color: #166534; }
+  .chip-closed { background: #e5e7eb; color: #4b5563; }
+  .chip-other { background: #fef3c7; color: #92400e; }
+</style>
+</head>
+<body>
+<h1>Job Tracker</h1>
+<form method="get" action="/">
+  <input type="search" name="q" value="{{.Query}}" placeholder="Search company, role, status, notes">
+  <button type="submit">Search</button>
+  {{if .Query}}<a href="/">Clear</a>{{end}}
+</form>
+<p>{{len .Apps}} of {{.Total}} applications</p>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th><a href="/?q={{.Query}}&sort=company&dir={{.NextDir}}">Company</a></th>
+      <th><a href="/?q={{.Query}}&sort=role&dir={{.NextDir}}">Role</a></th>
+      <th>Location</th>
+      <th><a href="/?q={{.Query}}&sort=date&dir={{.NextDir}}">Reviewed</a></th>
+      <th><a href="/?q={{.Query}}&sort=status&dir={{.NextDir}}">Status</a></th>
+      <th>Reported</th>
+      <th>Next action</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Apps}}
+    <tr>
+      <td>{{.ID}}</td>
+      <td>{{.Company}}</td>
+      <td>{{.RoleTitle}}</td>
+      <td>{{.Location}}</td>
+      <td>{{date .DateReviewed}}</td>
+      <td><span class="chip {{chip .Status}}">{{.Status}}</span></td>
+      <td>{{.Reported}}</td>
+      <td>{{.NextAction}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</body>
+</html>

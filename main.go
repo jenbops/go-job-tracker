@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http" // add this line
 	"os"
 	"time"
 )
@@ -41,6 +42,8 @@ func run(args []string) error {
 		return runImport(db, args[1:])
 	case "export":
 		return runExport(db, args[1:])
+	case "serve":
+		return runServe(db, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -150,4 +153,18 @@ func runExport(db *sql.DB, args []string) error {
 	}
 	defer f.Close()
 	return ExportCSV(db, f)
+}
+
+func runServe(db *sql.DB, args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	addr := fs.String("addr", "127.0.0.1:8080", "address to listen on")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	s, err := newServer(db)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("listening on http://%s (Ctrl+C to stop)\n", *addr)
+	return http.ListenAndServe(*addr, s.routes())
 }
