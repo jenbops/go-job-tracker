@@ -61,3 +61,16 @@ func ListApplications(db *sql.DB) ([]Application, error) {
 	}
 	return apps, rows.Err()
 }
+
+// DeleteApplication removes one row. It reports false if no row had that id.
+func DeleteApplication(db *sql.DB, id int64) (bool, error) {
+	res, err := db.Exec(`DELETE FROM applications WHERE id = ?`, id)
+	if err != nil {
+		return false, fmt.Errorf("delete application: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}

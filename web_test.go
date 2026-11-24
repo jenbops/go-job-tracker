@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -71,5 +72,40 @@ func TestSortAppsDateTieBreak(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("order = %v, want %v", got, want)
 		}
+	}
+}
+func TestDelete(t *testing.T) {
+	db := newTestDB(t)
+	s, err := newServer(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.routes()
+	id, err := AddApplication(db, Application{Company: "Acme", RoleTitle: "Director"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	do := func(method, path string) int {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
+		return rec.Code
+	}
+	path := fmt.Sprintf("/delete/%d", id)
+
+	if code := do("GET", path); code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET delete: status %d, want 405", code)
+	}
+	if apps, _ := ListApplications(db); len(apps) != 1 {
+		t.Fatal("a GET request must not delete anything")
+	}
+	if code := do("POST", path); code != http.StatusSeeOther {
+		t.Fatalf("POST delete: status %d, want 303", code)
+	}
+	if apps, _ := ListApplications(db); len(apps) != 0 {
+		t.Fatalf("row still present: %+v", apps)
+	}
+	if code := do("POST", "/delete/9999"); code != http.StatusNotFound {
+		t.Fatalf("missing id: status %d, want 404", code)
 	}
 }

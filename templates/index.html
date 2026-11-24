@@ -15,6 +15,7 @@
   .chip-interview { background: #dcfce7; color: #166534; }
   .chip-closed { background: #e5e7eb; color: #4b5563; }
   .chip-other { background: #fef3c7; color: #92400e; }
+  td form { margin: 0; }
 </style>
 </head>
 <body>
@@ -37,6 +38,7 @@
       <th><a href="/?q={{.Query}}&sort=status&dir={{.NextDir}}">Status</a></th>
       <th>Reported</th>
       <th>Next action</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -50,6 +52,11 @@
       <td><span class="chip {{chip .Status}}">{{.Status}}</span></td>
       <td>{{.Reported}}</td>
       <td>{{.NextAction}}</td>
+      <td>
+        <form method="post" action="/delete/{{.ID}}" onsubmit="return confirm('Delete row #{{.ID}}? This cannot be undone.')">
+          <button type="submit">Delete</button>
+        </form>
+      </td>
     </tr>
   {{end}}
   </tbody>

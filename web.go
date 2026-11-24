@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,8 +35,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /new", s.handleNewForm)
 	mux.HandleFunc("POST /new", s.handleCreate)
+	mux.HandleFunc("POST /delete/{id}", s.handleDelete)
 	mux.HandleFunc("GET /api/check", s.handleCheck)
-	return mux
+	return http.NewCrossOriginProtection().Handler(mux)
 }
 
 func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -230,4 +232,21 @@ func (s *server) handleCheck(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(out); err != nil {
 		log.Println("encode:", err)
 	}
+}
+func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	found, err := DeleteApplication(s.db, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
