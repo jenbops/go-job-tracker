@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
 
 //go:embed templates/*.html
@@ -30,6 +32,9 @@ func newServer(db *sql.DB) (*server, error) {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /new", s.handleNewForm)
+	mux.HandleFunc("POST /new", s.handleCreate)
+	mux.HandleFunc("GET /api/check", s.handleCheck)
 	return mux
 }
 
@@ -90,7 +95,12 @@ func sortApps(apps []Application, by string, desc bool) {
 	case "role":
 		less = func(i, j int) bool { return strings.ToLower(apps[i].RoleTitle) < strings.ToLower(apps[j].RoleTitle) }
 	case "date":
-		less = func(i, j int) bool { return apps[i].DateReviewed < apps[j].DateReviewed }
+		less = func(i, j int) bool {
+			if apps[i].DateReviewed != apps[j].DateReviewed {
+				return apps[i].DateReviewed < apps[j].DateReviewed
+			}
+			return apps[i].ID < apps[j].ID
+		}
 	case "status":
 		less = func(i, j int) bool { return strings.ToLower(apps[i].Status) < strings.ToLower(apps[j].Status) }
 	default:
@@ -116,4 +126,108 @@ func chipClass(status string) string {
 		return "chip-closed"
 	}
 	return "chip-other"
+}
+
+var statusOptions = []string{
+	"Applied", "Interview", "Screening Interview Scheduled",
+	"Screening Interview Complete", "Hiring Manager Interview",
+	"Sent Thank you for screening interview", "Passed", "Rejected",
+	"Closed/Removed", "Eliminated",
+}
+
+type formPage struct {
+	App      Application
+	Error    string
+	Matches  []Match
+	Statuses []string
+}
+
+func (s *server) renderForm(w http.ResponseWriter, p formPage) {
+	p.Statuses = statusOptions
+	if err := s.tmpl.ExecuteTemplate(w, "form.html", p); err != nil {
+		log.Println("render:", err)
+	}
+}
+
+func (s *server) handleNewForm(w http.ResponseWriter, r *http.Request) {
+	s.renderForm(w, formPage{App: Application{
+		Status:       "Applied",
+		Reported:     "Yes",
+		DateReviewed: time.Now().Format("2006-01-02"),
+	}})
+}
+
+func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	v := func(name string) string { return strings.TrimSpace(r.FormValue(name)) }
+	a := Application{
+		Company:        v("company"),
+		RoleTitle:      v("role"),
+		Location:       v("location"),
+		CompRange:      v("comp"),
+		Source:         v("source"),
+		DateReviewed:   normalizeDate(v("date")),
+		Status:         v("status"),
+		Reported:       v("reported"),
+		Fit:            v("fit"),
+		Notes:          v("notes"),
+		TailoredResume: v("tailored"),
+		NextAction:     v("next"),
+	}
+	if a.Company == "" || a.RoleTitle == "" {
+		s.renderForm(w, formPage{App: a, Error: "Company and role are required."})
+		return
+	}
+	if a.DateReviewed == "" {
+		a.DateReviewed = time.Now().Format("2006-01-02")
+	}
+	if r.FormValue("force") == "" {
+		matches, err := FindDuplicates(s.db, a.Company, a.RoleTitle)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(matches) > 0 {
+			s.renderForm(w, formPage{
+				App:     a,
+				Matches: matches,
+				Error:   "This company is already tracked. Check the box below to add it anyway.",
+			})
+			return
+		}
+	}
+	if _, err := AddApplication(s.db, a); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *server) handleCheck(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	matches, err := FindDuplicates(s.db, q.Get("company"), q.Get("role"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	type item struct {
+		ID       int64  `json:"id"`
+		Company  string `json:"company"`
+		Role     string `json:"role"`
+		Date     string `json:"date"`
+		Status   string `json:"status"`
+		SameRole bool   `json:"sameRole"`
+	}
+	out := make([]item, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, item{m.App.ID, m.App.Company, m.App.RoleTitle,
+			displayDate(m.App.DateReviewed), m.App.Status, m.SameRole})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		log.Println("encode:", err)
+	}
 }

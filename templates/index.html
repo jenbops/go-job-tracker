@@ -19,6 +19,7 @@
 </head>
 <body>
 <h1>Job Tracker</h1>
+<p><a href="/new">+ Add application</a></p>
 <form method="get" action="/">
   <input type="search" name="q" value="{{.Query}}" placeholder="Search company, role, status, notes">
   <button type="submit">Search</button>
@@ -28,7 +29,7 @@
 <table>
   <thead>
     <tr>
-      <th>#</th>
+      <th><a href="/?q={{.Query}}&sort=id&dir={{.NextDir}}">#</a></th>
       <th><a href="/?q={{.Query}}&sort=company&dir={{.NextDir}}">Company</a></th>
       <th><a href="/?q={{.Query}}&sort=role&dir={{.NextDir}}">Role</a></th>
       <th>Location</th>

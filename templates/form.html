@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add application</title>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 2rem; max-width: 720px; color: #222; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
+  input, select, textarea { width: 100%; padding: 6px; font: inherit; box-sizing: border-box; }
+  .error { background: #fee2e2; color: #991b1b; padding: 8px 12px; border-radius: 6px; }
+  .warning { background: #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 6px; margin-top: 8px; }
+  .same-role { font-weight: 700; }
+  .check { margin-top: 12px; }
+  .check input { width: auto; }
+  button { margin-top: 16px; padding: 8px 18px; font: inherit; }
+</style>
+</head>
+<body>
+<h1>Add application</h1>
+<p><a href="/">Back to the list</a></p>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+<form method="post" action="/new">
+  <label for="company">Company</label>
+  <input name="company" id="company" value="{{.App.Company}}" required>
+  <label for="role">Role title</label>
+  <input name="role" id="role" value="{{.App.RoleTitle}}" required>
+  <div id="warning" class="warning" hidden></div>
+  {{if .Matches}}
+  <p class="check"><label><input type="checkbox" name="force"> Add it anyway</label></p>
+  {{end}}
+
+  <label for="location">Location</label>
+  <input name="location" id="location" value="{{.App.Location}}">
+  <label for="comp">Comp range</label>
+  <input name="comp" id="comp" value="{{.App.CompRange}}">
+  <label for="source">Platform / source</label>
+  <input name="source" id="source" value="{{.App.Source}}">
+  <label for="date">Date reviewed</label>
+  <input type="date" name="date" id="date" value="{{.App.DateReviewed}}">
+
+  <label for="status">Status</label>
+  <select name="status" id="status">
+    {{range .Statuses}}<option{{if eq . $.App.Status}} selected{{end}}>{{.}}</option>{{end}}
+  </select>
+
+  <label for="reported">Reported</label>
+  <select name="reported" id="reported">
+    <option{{if ne .App.Reported "No"}} selected{{end}}>Yes</option>
+    <option{{if eq .App.Reported "No"}} selected{{end}}>No</option>
+  </select>
+
+  <label for="fit">Fit assessment</label>
+  <textarea name="fit" id="fit" rows="2">{{.App.Fit}}</textarea>
+  <label for="notes">Key gaps / notes</label>
+  <textarea name="notes" id="notes" rows="3">{{.App.Notes}}</textarea>
+  <label for="tailored">Materials tailored?</label>
+  <input name="tailored" id="tailored" value="{{.App.TailoredResume}}">
+  <label for="next">Next action</label>
+  <input name="next" id="next" value="{{.App.NextAction}}">
+
+  <button type="submit">Save</button>
+</form>
+
+<script>
+const company = document.getElementById('company');
+const role = document.getElementById('role');
+const box = document.getElementById('warning');
+let timer;
+
+function check() {
+  const c = company.value.trim();
+  if (!c) { box.hidden = true; return; }
+  const params = new URLSearchParams({company: c, role: role.value.trim()});
+  fetch('/api/check?' + params)
+    .then(function (r) { return r.json(); })
+    .then(function (items) {
+      box.replaceChildren();
+      if (items.length === 0) { box.hidden = true; return; }
+      const head = document.createElement('strong');
+      head.textContent = 'Already tracked (' + items.length + '):';
+      box.appendChild(head);
+      const ul = document.createElement('ul');
+      items.forEach(function (it) {
+        const li = document.createElement('li');
+        li.textContent = '#' + it.id + ' ' + it.company + ', ' + it.role +
+          ' (' + it.date + ', ' + it.status + ')' + (it.sameRole ? ' - SAME ROLE' : '');
+        if (it.sameRole) { li.className = 'same-role'; }
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+      box.hidden = false;
+    });
+}
+function schedule() { clearTimeout(timer); timer = setTimeout(check, 250); }
+company.addEventListener('input', schedule);
+role.addEventListener('input', schedule);
+check();
+</script>
+</body>
+</html>
