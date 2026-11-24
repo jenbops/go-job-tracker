@@ -109,3 +109,40 @@ func TestDelete(t *testing.T) {
 		t.Fatalf("missing id: status %d, want 404", code)
 	}
 }
+func TestEdit(t *testing.T) {
+	db := newTestDB(t)
+	s, err := newServer(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.routes()
+	id, err := AddApplication(db, Application{Company: "Acme", RoleTitle: "Director", Status: "Applied"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	post := func(path string, form url.Values) int {
+		req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	form := url.Values{
+		"company": {"Acme"}, "role": {"Director"},
+		"status": {"Interview"}, "notes": {"phone screen done"},
+	}
+	if code := post(fmt.Sprintf("/edit/%d", id), form); code != http.StatusSeeOther {
+		t.Fatalf("edit: status %d, want 303", code)
+	}
+	a, found, err := GetApplication(db, id)
+	if err != nil || !found {
+		t.Fatalf("get after edit: found=%v err=%v", found, err)
+	}
+	if a.Status != "Interview" || a.Notes != "phone screen done" {
+		t.Fatalf("row not updated: %+v", a)
+	}
+	if code := post("/edit/9999", form); code != http.StatusNotFound {
+		t.Fatalf("missing id: status %d, want 404", code)
+	}
+}

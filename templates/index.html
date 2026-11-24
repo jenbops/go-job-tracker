@@ -15,7 +15,7 @@
   .chip-interview { background: #dcfce7; color: #166534; }
   .chip-closed { background: #e5e7eb; color: #4b5563; }
   .chip-other { background: #fef3c7; color: #92400e; }
-  td form { margin: 0; }
+  td form { margin: 0; display: inline; }
 </style>
 </head>
 <body>
@@ -53,6 +53,7 @@
       <td>{{.Reported}}</td>
       <td>{{.NextAction}}</td>
       <td>
+        <a href="/edit/{{.ID}}">Edit</a>
         <form method="post" action="/delete/{{.ID}}" onsubmit="return confirm('Delete row #{{.ID}}? This cannot be undone.')">
           <button type="submit">Delete</button>
         </form>

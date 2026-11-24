@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +39,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /new", s.handleCreate)
 	mux.HandleFunc("POST /delete/{id}", s.handleDelete)
 	mux.HandleFunc("GET /api/check", s.handleCheck)
+	mux.HandleFunc("GET /edit/{id}", s.handleEditForm)
+	mux.HandleFunc("POST /edit/{id}", s.handleUpdate)
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
@@ -142,10 +146,18 @@ type formPage struct {
 	Error    string
 	Matches  []Match
 	Statuses []string
+	Editing  bool
+	Action   string
 }
 
 func (s *server) renderForm(w http.ResponseWriter, p formPage) {
 	p.Statuses = statusOptions
+	if p.App.Status != "" && !slices.Contains(statusOptions, p.App.Status) {
+		p.Statuses = append(slices.Clone(statusOptions), p.App.Status)
+	}
+	if p.Action == "" {
+		p.Action = "/new"
+	}
 	if err := s.tmpl.ExecuteTemplate(w, "form.html", p); err != nil {
 		log.Println("render:", err)
 	}
@@ -159,13 +171,10 @@ func (s *server) handleNewForm(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
-func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
-		return
-	}
+// applicationFromForm reads the submitted form fields into an Application.
+func applicationFromForm(r *http.Request) Application {
 	v := func(name string) string { return strings.TrimSpace(r.FormValue(name)) }
-	a := Application{
+	return Application{
 		Company:        v("company"),
 		RoleTitle:      v("role"),
 		Location:       v("location"),
@@ -179,6 +188,14 @@ func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		TailoredResume: v("tailored"),
 		NextAction:     v("next"),
 	}
+}
+
+func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	a := applicationFromForm(r)
 	if a.Company == "" || a.RoleTitle == "" {
 		s.renderForm(w, formPage{App: a, Error: "Company and role are required."})
 		return
@@ -207,7 +224,6 @@ func (s *server) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
-
 func (s *server) handleCheck(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	matches, err := FindDuplicates(s.db, q.Get("company"), q.Get("role"))
@@ -240,6 +256,61 @@ func (s *server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	found, err := DeleteApplication(s.db, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// pathID reads the {id} part of the address. It writes the error response itself.
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return 0, false
+	}
+	return id, true
+}
+
+func (s *server) handleEditForm(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	a, found, err := GetApplication(s.db, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	s.renderForm(w, formPage{App: a, Editing: true, Action: fmt.Sprintf("/edit/%d", id)})
+}
+
+func (s *server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	a := applicationFromForm(r)
+	a.ID = id
+	if a.Company == "" || a.RoleTitle == "" {
+		s.renderForm(w, formPage{App: a, Editing: true, Action: fmt.Sprintf("/edit/%d", id),
+			Error: "Company and role are required."})
+		return
+	}
+	found, err := UpdateApplication(s.db, a)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

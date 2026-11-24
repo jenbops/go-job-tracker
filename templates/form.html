@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Add application</title>
+<title>{{if .Editing}}Edit{{else}}Add{{end}} application</title>
 <style>
   body { font-family: -apple-system, sans-serif; margin: 2rem; max-width: 720px; color: #222; }
   label { display: block; margin: 12px 0 4px; font-weight: 600; font-size: 14px; }
@@ -16,10 +16,10 @@
 </style>
 </head>
 <body>
-<h1>Add application</h1>
+<h1>{{if .Editing}}Edit application #{{.App.ID}}{{else}}Add application{{end}}</h1>
 <p><a href="/">Back to the list</a></p>
 {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
-<form method="post" action="/new">
+<form method="post" action="{{.Action}}">
   <label for="company">Company</label>
   <input name="company" id="company" value="{{.App.Company}}" required>
   <label for="role">Role title</label>
@@ -61,7 +61,7 @@
   <button type="submit">Save</button>
 </form>
 
-<script>
+{{if not .Editing}}<script> 
 const company = document.getElementById('company');
 const role = document.getElementById('role');
 const box = document.getElementById('warning');
@@ -95,6 +95,6 @@ function schedule() { clearTimeout(timer); timer = setTimeout(check, 250); }
 company.addEventListener('input', schedule);
 role.addEventListener('input', schedule);
 check();
-</script>
+</script>{{end}}
 </body>
 </html>
