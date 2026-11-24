@@ -19,7 +19,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: go-job-tracker <add|list> [flags]")
+		return errors.New("usage: go-job-tracker <add|list|check|import|export|sync|serve> [flags]")
 	}
 	path, err := defaultDBPath()
 	if err != nil {
@@ -44,6 +44,8 @@ func run(args []string) error {
 		return runExport(db, args[1:])
 	case "serve":
 		return runServe(db, args[1:])
+	case "sync":
+		return runSync(db, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -153,6 +155,43 @@ func runExport(db *sql.DB, args []string) error {
 	}
 	defer f.Close()
 	return ExportCSV(db, f)
+}
+
+func runSync(db *sql.DB, args []string) error {
+	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
+	dry := fs.Bool("dry-run", false, "show differences without changing the database")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: sync [-dry-run] FILE.csv")
+	}
+	f, err := os.Open(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	rep, err := SyncCSV(db, f, *dry)
+	if err != nil {
+		return err
+	}
+	verb := "added"
+	if *dry {
+		verb = "would add"
+	}
+	for _, a := range rep.New {
+		fmt.Printf("%s: %s, %s (%s)\n", verb, a.Company, a.RoleTitle, a.Status)
+	}
+	for _, c := range rep.Changed {
+		fmt.Println("changed:", c)
+	}
+	for _, a := range rep.OnlyDB {
+		fmt.Printf("only in database (kept): #%d %s, %s\n", a.ID, a.Company, a.RoleTitle)
+	}
+	fmt.Printf("%d new, %d changed, %d unchanged, %d only in database\n",
+		len(rep.New), len(rep.Changed), rep.Same, len(rep.OnlyDB))
+	return nil
 }
 
 func runServe(db *sql.DB, args []string) error {

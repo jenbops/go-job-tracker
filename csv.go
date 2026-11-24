@@ -36,6 +36,38 @@ func displayDate(s string) string {
 	return t.Format("1/2/2006")
 }
 
+// headerIndex maps each lowercase column name to its position in the header row.
+func headerIndex(header []string) map[string]int {
+	index := make(map[string]int)
+	for i, h := range header {
+		h = strings.TrimPrefix(h, "\ufeff") // some exports start with an invisible marker
+		index[strings.ToLower(strings.TrimSpace(h))] = i
+	}
+	return index
+}
+
+// columnAliases lists other header names a column may go by. The key is the
+// lowercase column name the code asks for, and the value is the lowercase
+// alternatives to try when the header does not have it. It starts empty. A
+// file ending in _local.go (git-ignored) can add entries from an init
+// function, so personal header names stay out of the shared code.
+var columnAliases = map[string][]string{}
+
+// columnGetter returns a function that reads one field from a row by column
+// name. It tries the name first, then any aliases from columnAliases, and
+// returns an empty string when the header has none of them.
+func columnGetter(index map[string]int) func(rec []string, name string) string {
+	return func(rec []string, name string) string {
+		name = strings.ToLower(name)
+		for _, candidate := range append([]string{name}, columnAliases[name]...) {
+			if i, ok := index[candidate]; ok && i < len(rec) {
+				return strings.TrimSpace(rec[i])
+			}
+		}
+		return ""
+	}
+}
+
 // ImportCSV reads rows from r and adds the ones not already present.
 // It returns how many rows were added and how many were skipped.
 func ImportCSV(db *sql.DB, r io.Reader) (int, int, error) {
@@ -46,23 +78,13 @@ func ImportCSV(db *sql.DB, r io.Reader) (int, int, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("read header: %w", err)
 	}
-	index := make(map[string]int)
-	for i, h := range header {
-		h = strings.TrimPrefix(h, "\ufeff") // some exports start with an invisible marker
-		index[strings.ToLower(strings.TrimSpace(h))] = i
-	}
+	index := headerIndex(header)
 	for _, need := range []string{"company", "role title"} {
 		if _, ok := index[need]; !ok {
 			return 0, 0, fmt.Errorf("header has no %q column; found %q", need, header)
 		}
 	}
-	get := func(rec []string, name string) string {
-		i, ok := index[strings.ToLower(name)]
-		if !ok || i >= len(rec) {
-			return ""
-		}
-		return strings.TrimSpace(rec[i])
-	}
+	get := columnGetter(index)
 
 	added, skipped := 0, 0
 	for {
