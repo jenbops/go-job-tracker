@@ -24,7 +24,7 @@ type server struct {
 }
 
 func newServer(db *sql.DB) (*server, error) {
-	funcs := template.FuncMap{"date": displayDate, "chip": chipClass}
+	funcs := template.FuncMap{"date": displayDate, "chip": chipClass, "statusChoices": statusChoices}
 	t, err := template.New("").Funcs(funcs).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -41,6 +41,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/check", s.handleCheck)
 	mux.HandleFunc("GET /edit/{id}", s.handleEditForm)
 	mux.HandleFunc("POST /edit/{id}", s.handleUpdate)
+	mux.HandleFunc("POST /status/{id}", s.handleStatus)
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
@@ -69,8 +70,8 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		Query   string
 		NextDir string
 		Total   int
-	}{apps, q, nextDir, len(all)}
-
+		Back    string
+	}{apps, q, nextDir, len(all), r.URL.RequestURI()}
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		log.Println("render:", err)
 	}
@@ -134,6 +135,15 @@ func chipClass(status string) string {
 	return "chip-other"
 }
 
+// statusChoices returns the dropdown options, adding current if it is not
+// in the standard list. That way saving never changes a status by accident.
+func statusChoices(current string) []string {
+	if current == "" || slices.Contains(statusOptions, current) {
+		return statusOptions
+	}
+	return append(slices.Clone(statusOptions), current)
+}
+
 var statusOptions = []string{
 	"Applied", "Interview", "Screening Interview Scheduled",
 	"Screening Interview Complete", "Hiring Manager Interview",
@@ -151,10 +161,7 @@ type formPage struct {
 }
 
 func (s *server) renderForm(w http.ResponseWriter, p formPage) {
-	p.Statuses = statusOptions
-	if p.App.Status != "" && !slices.Contains(statusOptions, p.App.Status) {
-		p.Statuses = append(slices.Clone(statusOptions), p.App.Status)
-	}
+	p.Statuses = statusChoices(p.App.Status)
 	if p.Action == "" {
 		p.Action = "/new"
 	}
@@ -320,4 +327,38 @@ func (s *server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	status := strings.TrimSpace(r.FormValue("status"))
+	if status == "" {
+		http.Error(w, "status is required", http.StatusBadRequest)
+		return
+	}
+	found, err := UpdateStatus(s.db, id, status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, safeBack(r.FormValue("back")), http.StatusSeeOther)
+}
+
+// safeBack allows only a path on this site, so a form cannot send the
+// browser to another website after saving.
+func safeBack(p string) string {
+	if strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") && !strings.HasPrefix(p, `/\`) {
+		return p
+	}
+	return "/"
 }

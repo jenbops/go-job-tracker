@@ -146,3 +146,47 @@ func TestEdit(t *testing.T) {
 		t.Fatalf("missing id: status %d, want 404", code)
 	}
 }
+func postForm(h http.Handler, path string, form url.Values) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestStatusChange(t *testing.T) {
+	db := newTestDB(t)
+	s, err := newServer(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.routes()
+	id, err := AddApplication(db, Application{Company: "Acme", RoleTitle: "Director", Status: "Applied"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/status/%d", id)
+
+	form := url.Values{"status": {"Interview"}, "back": {"/?q=acme&sort=date"}}
+	rec := postForm(h, path, form)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/?q=acme&sort=date" {
+		t.Fatalf("got %d to %q", rec.Code, rec.Header().Get("Location"))
+	}
+	a, found, err := GetApplication(db, id)
+	if err != nil || !found {
+		t.Fatalf("get: found=%v err=%v", found, err)
+	}
+	if a.Status != "Interview" || a.Company != "Acme" {
+		t.Fatalf("unexpected row: %+v", a)
+	}
+
+	form.Set("back", "//evil.example/")
+	if loc := postForm(h, path, form).Header().Get("Location"); loc != "/" {
+		t.Fatalf("redirect to another site was allowed: %q", loc)
+	}
+
+	form.Set("status", " ")
+	if code := postForm(h, path, form).Code; code != http.StatusBadRequest {
+		t.Fatalf("empty status: got %d, want 400", code)
+	}
+}

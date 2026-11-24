@@ -121,3 +121,19 @@ func UpdateApplication(db *sql.DB, a Application) (bool, error) {
 	}
 	return n > 0, nil
 }
+
+// UpdateStatus changes only the status of one row.
+// It reports false if no row had that id.
+func UpdateStatus(db *sql.DB, id int64, status string) (bool, error) {
+	res, err := db.Exec(`
+		UPDATE applications SET status = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?`, status, id)
+	if err != nil {
+		return false, fmt.Errorf("update status: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}

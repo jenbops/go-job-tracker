@@ -16,6 +16,7 @@
   .chip-closed { background: #e5e7eb; color: #4b5563; }
   .chip-other { background: #fef3c7; color: #92400e; }
   td form { margin: 0; display: inline; }
+  select.chip { border: none; cursor: pointer; padding: 2px 4px; }
 </style>
 </head>
 <body>
@@ -49,7 +50,15 @@
       <td>{{.RoleTitle}}</td>
       <td>{{.Location}}</td>
       <td>{{date .DateReviewed}}</td>
-      <td><span class="chip {{chip .Status}}">{{.Status}}</span></td>
+      <td>
+        {{$status := .Status}}
+        <form method="post" action="/status/{{.ID}}">
+          <input type="hidden" name="back" value="{{$.Back}}">
+          <select name="status" class="chip {{chip .Status}}" onchange="this.form.submit()" aria-label="Status">
+            {{range statusChoices $status}}<option{{if eq . $status}} selected{{end}}>{{.}}</option>{{end}}
+          </select>
+        </form>
+      </td>
       <td>{{.Reported}}</td>
       <td>{{.NextAction}}</td>
       <td>
